@@ -4,26 +4,57 @@
 #include<assert.h>
 
 #define NUMBER_OF_CRACKFRONT_POINTS 10000
+#define NUMBER_OF_CRACK_POINTS 100000
 #define NUMBER_OF_PATCHS 1000000
+#define NUMBER_OF_LAMINATION_POINTS 1000000
 #define NUMBER_OF_TRIANGLE_VERTEXS 3
+#define NUMBER_OF_OUTER_LAYERS 2
+#define NUMBER_OF_INNER_LAYERS 2
 #define DIMENSION 3
+#define LAMINATIONSCALE 0.1
 #define EPS 0.000001
 
+#define CRACK_FRONT 2
+#define CRACK_FACE 1
+#define OUTER_CRACK 0
+
+#define CRACK_SURFACE 1
+#define OTHER 0
+
 int nnodes;
+int completed_nnodes;
+int number_of_inner_nodes;
+int number_of_innerest_nodes;
 int npatch;
-int univec_minus_flag[NUMBER_OF_CRACKFRONT_POINTS];
+int minus_flag[NUMBER_OF_CRACKFRONT_POINTS];
+int inout_flag[NUMBER_OF_CRACKFRONT_POINTS];
+int crack_flag[NUMBER_OF_CRACK_POINTS];
+int surface_flag[NUMBER_OF_CRACK_POINTS];
+int new_nodes_flag[NUMBER_OF_LAMINATION_POINTS];
 double nodes_coordinate[NUMBER_OF_CRACKFRONT_POINTS][DIMENSION];
+double completed_nodes_coordinate[NUMBER_OF_CRACK_POINTS][DIMENSION];
+double inner_nodes_coordinate[NUMBER_OF_CRACKFRONT_POINTS][DIMENSION];
+double innerest_nodes_coordinate[NUMBER_OF_CRACKFRONT_POINTS][DIMENSION];
 double patch_coord[NUMBER_OF_PATCHS][NUMBER_OF_TRIANGLE_VERTEXS][DIMENSION];
 double patch_cg[NUMBER_OF_PATCHS][DIMENSION];
-double temp_univec_normal[DIMENSION];
-double temp_univec_propa[DIMENSION];
-double temp_univec_tangent[DIMENSION];
+double init_univec_normal[DIMENSION];
 double univec_normal[NUMBER_OF_CRACKFRONT_POINTS][DIMENSION];
 double univec_propa[NUMBER_OF_CRACKFRONT_POINTS][DIMENSION];
 double univec_tangent[NUMBER_OF_CRACKFRONT_POINTS][DIMENSION];
+double innerest_univec_normal[NUMBER_OF_CRACKFRONT_POINTS][DIMENSION];
+double innerest_univec_propa[NUMBER_OF_CRACKFRONT_POINTS][DIMENSION];
+double innerest_univec_tangent[NUMBER_OF_CRACKFRONT_POINTS][DIMENSION];
 double p_to_p_vector[NUMBER_OF_CRACKFRONT_POINTS][DIMENSION];
+double innerest_nodes_p_to_p_vector[NUMBER_OF_CRACKFRONT_POINTS][DIMENSION];
 double layer_size;
 double scale_factor;
+double lamination_weight[NUMBER_OF_CRACKFRONT_POINTS];
+double layer_length[NUMBER_OF_CRACKFRONT_POINTS];
+double layer_length_sum;
+char patch_file_name[256];
+double temp_crackface_new_nodes_coordinate[NUMBER_OF_CRACKFRONT_POINTS][DIMENSION];
+int temp_count;
+
 
 double Distance(double a[], double b[])
 {
@@ -51,6 +82,34 @@ void CrossProduct(double a[], double b[], double c[])
   c[0] = a[1]*b[2] - a[2]*b[1];
   c[1] = a[2]*b[0] - a[0]*b[2];
   c[2] = a[0]*b[1] - a[1]*b[0];
+}
+
+double GetVectorLength(double a[])
+{
+  double length;
+  length = sqrt(a[0]*a[0] + a[1]*a[1] + a[2]*a[2]);
+  return length;
+}
+
+void GetMaxandMin(int start, int total, double value[], int max, int min)
+{
+  int i;
+  double max_value;
+  double min_value;
+  max_value = value[start];
+  max = start;
+  min_value = value[start];
+  min = start;
+  for(i = 0; i < total; i++){
+    if(max_value < value[i]){
+      max_value = value[i];
+      max = i;
+      if(min_value > value[i]){
+        min_value = value[i];
+        min = i;
+      }
+    }
+  }
 }
 
 int InverseMatrix_3D( double M[3][3], double zero ){
@@ -104,7 +163,7 @@ void ReadNodes(const char *filename)
     printf("x=%le y=%le z=%le\n",nodes_coordinate[i][0],nodes_coordinate[i][1],nodes_coordinate[i][2]);
   }
 }
-  
+
 
 void ReadUnivector(const char *filename)
 {
@@ -113,10 +172,10 @@ void ReadUnivector(const char *filename)
   fp = fopen (filename,"r");
   assert(fp!=NULL);
 
-    fscanf(fp,"%le %le %le\n",
-        &temp_univec_normal[0],
-        &temp_univec_normal[1],
-        &temp_univec_normal[2]);
+  fscanf(fp,"%le %le %le\n",
+      &init_univec_normal[0],
+      &init_univec_normal[1],
+      &init_univec_normal[2]);
   fclose(fp);
 }
 
@@ -141,6 +200,149 @@ void ReadPatch(const char *fileName)
         fscanf(fp,"%lf",&patch_coord[ipatch][ip][idir]);
   }
   fclose(fp);
+}
+
+#define INNEREST "___temp_innerest.node"
+#define INNERESTINOUT "___temp_innerest.node_inout"
+
+void WriteNodes(int total, double nodes_coordinate[][DIMENSION])
+{
+  const char filename[200] = "___temp_innerest.node";
+  FILE *fp;
+  int inode,idir;
+
+  fp = fopen(filename, "w");
+
+  fprintf(fp, "%d\n", total);
+
+  for(inode = 0; inode < total; inode++){
+    fprintf(fp, "%d %lf %lf %lf\n", inode, nodes_coordinate[inode][0],nodes_coordinate[inode][1],nodes_coordinate[inode][2]);
+  }
+  fclose(fp);
+}
+
+void ReadNodesInOut(int total)
+{
+  const char *filename = "INNERESTINOUT";
+  FILE *fp;
+  int temp_total;
+  int i;
+  int dummy;
+  fp = fopen(filename, "r");
+
+  fscanf(fp, "%d", &temp_total);
+  assert(total==temp_total);
+
+  for(i = 0; i < temp_total; i++){
+    fscanf(fp, "%d %d", &dummy, &inout_flag[i]);
+  }
+}
+
+void WriteCompleteNodes(const char *filename)
+{
+  FILE *fp;
+  int inode,idir;
+
+  fp = fopen(filename, "w");
+
+  fprintf(fp, "%d\n", completed_nnodes);
+
+  for(inode = 0; inode < completed_nnodes; inode++){
+    fprintf(fp, "%d %lf %lf %lf\n", inode, completed_nodes_coordinate[inode][0],completed_nodes_coordinate[inode][1],completed_nodes_coordinate[inode][2]);
+  }
+  fclose(fp);
+}
+
+void WriteCrackFlag(const char *filename)
+{
+  FILE *fp;
+  int inode;
+
+  fp = fopen(filename, "w");
+
+  fprintf(fp, "%d\n", completed_nnodes);
+
+  for(inode = 0; inode < completed_nnodes; inode++){
+    fprintf(fp, "%d %d\n", inode, crack_flag[inode]);
+  }
+  fclose(fp);
+}
+
+void WriteSurfaceFlag(const char *filename)
+{
+  FILE *fp;
+  int inode;
+
+  fp = fopen(filename, "w");
+
+  fprintf(fp, "%d\n", completed_nnodes);
+
+  for(inode = 0; inode < completed_nnodes; inode++){
+    fprintf(fp, "%d %d\n", inode, surface_flag[inode]);
+  }
+  fclose(fp);
+}
+
+void AddNewNode(double new_nodes_coordinate[], int temp_crack_flag, int temp_surface_flag)
+{
+  int i;
+  for(i = 0; i < DIMENSION; i++){
+    completed_nodes_coordinate[nnodes][i] = new_nodes_coordinate[i];
+  }
+  crack_flag[nnodes] = temp_crack_flag;
+  surface_flag[nnodes] = temp_surface_flag;
+  completed_nnodes++;
+}
+
+void TempAddNewNode(double new_nodes_coordinate[])
+{
+  int i;
+  for(i = 0; i < DIMENSION; i++){
+  temp_crackface_new_nodes_coordinate[temp_count][i] = new_nodes_coordinate[i];
+  }
+  new_nodes_flag[temp_count] = 1;
+  temp_count++;
+}
+
+void ClearNumberOfInnerestNodes()
+{
+  number_of_innerest_nodes = 0;
+}
+
+void ClearInOutFlag()
+{
+  int i;
+  for(i = 0; i < NUMBER_OF_CRACKFRONT_POINTS; i++){
+    inout_flag[i] = 1;
+  }
+}
+
+void ClearNewNodeFlag()
+{
+  int i;
+  for (i = 0; i <NUMBER_OF_LAMINATION_POINTS; i++)
+    new_nodes_flag[i] = 0;
+}
+
+void AddInnerNode(double new_nodes_coordinate[])
+{
+  int i;
+  for(i = 0; i < DIMENSION; i++){
+    inner_nodes_coordinate[number_of_inner_nodes][i] = new_nodes_coordinate[i];
+  }
+  number_of_inner_nodes++;
+}
+
+void ResisterCrackFrontNodes(int total, double temp_nodes_coordinate[][DIMENSION])
+{
+  int i;
+  for(i = 0; i < total; i++){
+    if(i == 0 || i == total-1){
+      AddNewNode(temp_nodes_coordinate[i], CRACK_FRONT, CRACK_SURFACE);
+    } else {
+      AddNewNode(temp_nodes_coordinate[i], CRACK_FRONT, OTHER);
+    }
+  }
 }
 
 //patch_cgとして表面パッチの重心を登録
@@ -221,6 +423,60 @@ int CompCrossingPt_TriangleAndLine(double vecA[3], double vecB[3],
   return(0);
 }
 
+void GetLayerLength(int total, double nodes_coordinate[][DIMENSION])
+{
+  int i, j;
+  double value;
+  double sum;
+  double temp_vector[DIMENSION];
+  for(i = 0; i < total - 1; i++){
+    for(j = 0; j < DIMENSION; j++){
+      temp_vector[j] = nodes_coordinate[i+1][j] - nodes_coordinate[i][j];
+    }
+    layer_length[i] = sqrt(temp_vector[0]*temp_vector[0] + temp_vector[1] * temp_vector[1] + temp_vector[2] * temp_vector[2]);
+    layer_length_sum += layer_length[i];
+  }
+}
+
+void RearrangeLayer(int total, double nodes_coordinate[][DIMENSION])
+{
+  int i, j;
+  int number_of_division;
+  int count = 1;
+  int nodes_count = 0;
+  double temp_nodal_distance;
+  double vector_coefficient = 0.0;
+  double temp_nodes_coordinate[NUMBER_OF_CRACKFRONT_POINTS][DIMENSION];
+  number_of_division = layer_length_sum/layer_size + 0.5;
+  temp_nodal_distance = layer_length_sum/number_of_division;
+  for(j = 0; j < DIMENSION; j++){
+    temp_nodes_coordinate[0][j] = nodes_coordinate[0][j];
+  }
+
+  while(1){
+    vector_coefficient = vector_coefficient - temp_nodal_distance;
+    if(vector_coefficient >= 0){
+      for(j = 0; j < DIMENSION; j++){
+        temp_nodes_coordinate[count][j] = nodes_coordinate[nodes_count][j] + vector_coefficient * (nodes_coordinate[nodes_count+1][j] - nodes_coordinate[nodes_count][j]);
+        count++;
+      }
+    } else {
+      vector_coefficient = vector_coefficient + layer_length[nodes_count];
+      nodes_count++;
+      if(nodes_count == total) break;
+    }
+  }
+  for(j = 0; j < DIMENSION; j++){
+    temp_nodes_coordinate[count][j] = nodes_coordinate[total][j];
+  }
+  for(i = 0; i < count; i++){
+    for(j = 0; j < DIMENSION; j++){
+      nodes_coordinate[i][j] = temp_nodes_coordinate[i][j];
+    }
+  }
+  total = count;
+}
+
 //き裂前縁メッシュサイズ及び層間距離読み込み
 void ReadCrackParam(const char *fileName)
 {
@@ -244,16 +500,13 @@ void ReadVector(const char *filename)
 {
 }
 
-void GetPointtoPointVector()
+void GetPointtoPointVector(int temp_nnodes, double temp_nodes_coordinate[][DIMENSION], double temp_p_to_p_vector[][DIMENSION])
 {
   int i, j;
-  for(j = 0; j < DIMENSION; j++){
-    univec_normal[0][j] = p_to_p_vector[0][j];
-  }
-  for(i = 0; i < nnodes-1; i++){
+  for(i = 0; i < temp_nnodes-1; i++){
     for(j = 0; j < DIMENSION; j++){
-      p_to_p_vector[i][j] = nodes_coordinate[i+1][j] - nodes_coordinate[i][j];
-      GetUnitVector(p_to_p_vector[i]);
+      temp_p_to_p_vector[i][j] = temp_nodes_coordinate[i+1][j] - temp_nodes_coordinate[i][j];
+      GetUnitVector(temp_p_to_p_vector[i]);
     }
   }
 }
@@ -263,47 +516,47 @@ void SetScaleFactor()
   scale_factor = layer_size * 2;
 }
 
-void CleanUnivecMinusFlag()
+void ClearMinusFlag()
 { int i;
   for(i = 0; i < NUMBER_OF_CRACKFRONT_POINTS; i++){
-    univec_minus_flag[i] = 0;
+    minus_flag[i] = 0;
   }
 }
 
-void GetUnivectoratAllPoint()
+void GetUnivectoratAllPoint(int temp_nnodes, double temp_p_to_p_vector[][DIMENSION], double temp_univec_normal[][DIMENSION], double temp_univec_propa[][DIMENSION], double temp_univec_tangent[][DIMENSION])
 {
   int i, j;
   double product;
   for(j = 0; j < DIMENSION; j++){
-    univec_tangent[0][j] = p_to_p_vector[0][j];
-    univec_normal[0][j] = temp_univec_normal[j];
+    temp_univec_tangent[0][j] = temp_p_to_p_vector[0][j];
+    temp_univec_normal[0][j] = init_univec_normal[j];
   }
-  GetUnitVector(univec_normal[0]);
-  CrossProduct(univec_normal[0], univec_tangent[0], univec_propa[0]);
-  GetUnitVector(univec_propa[0]);
+  GetUnitVector(temp_univec_normal[0]);
+  CrossProduct(temp_univec_normal[0], temp_univec_tangent[0], temp_univec_propa[0]);
+  GetUnitVector(temp_univec_propa[0]);
 
 
-  for(i = 1; i < nnodes - 1; i++){
-    CrossProduct(p_to_p_vector[i], p_to_p_vector[i-1], univec_normal[i]);
-    product = InnerProduct(univec_normal[i], univec_normal[i-1]);
+  for(i = 1; i < temp_nnodes - 1; i++){
+    CrossProduct(temp_p_to_p_vector[i], temp_p_to_p_vector[i-1], temp_univec_normal[i]);
+    product = InnerProduct(temp_univec_normal[i], temp_univec_normal[i-1]);
     if(product < 0){
       for(j = 0; j < DIMENSION; j++){
-        univec_normal[i][j] = -univec_normal[i][j];
+        temp_univec_normal[i][j] = -temp_univec_normal[i][j];
       }
-      univec_minus_flag[i] = 1;
+      minus_flag[i] = 1;
     }
-    GetAverageVector(p_to_p_vector[i-1], p_to_p_vector[i], univec_tangent[i]);
-    GetUnitVector(univec_normal[i]);
-    CrossProduct(univec_normal[i], univec_tangent[i], univec_propa[i]);
-    GetUnitVector(univec_propa[i]);
+    GetAverageVector(temp_p_to_p_vector[i-1], temp_p_to_p_vector[i], temp_univec_tangent[i]);
+    GetUnitVector(temp_univec_normal[i]);
+    CrossProduct(temp_univec_normal[i], temp_univec_tangent[i], temp_univec_propa[i]);
+    GetUnitVector(temp_univec_propa[i]);
   }
 
   for(j = 0; j < DIMENSION; j++){
-    univec_tangent[nnodes-1][j] = p_to_p_vector[nnodes-2][j];
-    univec_normal[nnodes-1][j] = univec_normal[nnodes-2][j];
+    temp_univec_tangent[temp_nnodes-1][j] = temp_p_to_p_vector[temp_nnodes-2][j];
+    temp_univec_normal[temp_nnodes-1][j] = temp_univec_normal[temp_nnodes-2][j];
   }
-  CrossProduct(univec_normal[nnodes-1], univec_tangent[nnodes-1], univec_propa[nnodes-1]);
-  GetUnitVector(univec_propa[nnodes-1]);
+  CrossProduct(temp_univec_normal[temp_nnodes-1], temp_univec_tangent[temp_nnodes-1], temp_univec_propa[temp_nnodes-1]);
+  GetUnitVector(temp_univec_propa[temp_nnodes-1]);
 }
 
 void SurfaceCorrectionAdvVec(double AdvVec[3], double Normal[3])
@@ -376,9 +629,9 @@ void ComputeNormalNormalAndMovingVec(double CoordVec[3], double TanVec[3],
       //	  iPatch, if_singular, pp, qq, mm);
 
       if(if_singular == 0){
-      ////き裂前縁の端の点から出ているベクトルと三角形パッチが交わるときの
-      //vecA,vecB,-vecTの係数の係数をみて、三角形が成す平面と
-      //ベクトルの交点がパッチの面内にあり、点からパッチまでの距離が最も近いところをiPatch_keepとする
+        ////き裂前縁の端の点から出ているベクトルと三角形パッチが交わるときの
+        //vecA,vecB,-vecTの係数の係数をみて、三角形が成す平面と
+        //ベクトルの交点がパッチの面内にあり、点からパッチまでの距離が最も近いところをiPatch_keepとする
         if(Min_mm > fabs(mm) && (pp+qq) < (1.0+epsilon) && 
             pp > (-epsilon) && qq > (-epsilon)){
           Min_mm = fabs(mm);
@@ -419,7 +672,7 @@ void ComputeNormalNormalAndMovingVec(double CoordVec[3], double TanVec[3],
 
 void VectorCorrectiontoSurface()
 {
-  
+
   int i,j;
   double CoordVecStart[3], CoordVecEnd[3]; 
   double AdvCoordVecStart1[3], AdvCoordVecEnd1[3];
@@ -504,27 +757,189 @@ void VectorCorrectiontoSurface()
 
 void MakeInOutLayer()
 {
+  int i,j,k;
+  double coord_of_outer_layer[DIMENSION];
+  double coord_of_inner_layer[DIMENSION];
+  for(i = 0; i < NUMBER_OF_OUTER_LAYERS; i++){
+    for(j = 0; j < nnodes; j++){
+      for(k = 0; k < DIMENSION; k++){
+        coord_of_outer_layer[k] = nodes_coordinate[j][k] + (i+1) * univec_propa[j][k];
+      }
+      if(j == 0 || j == nnodes-1){
+        AddNewNode(coord_of_outer_layer, OUTER_CRACK, CRACK_SURFACE);
+      } else {
+        AddNewNode(coord_of_outer_layer, OUTER_CRACK, OTHER);
+      }
+    }
+  }
 
+  ClearNumberOfInnerestNodes();
+
+  for(i = 0; i < NUMBER_OF_INNER_LAYERS; i++){
+    for(j = 0; j < nnodes - 1; j++){
+      for(k = 0; k < DIMENSION; k++){
+        coord_of_inner_layer[k] = nodes_coordinate[j][k] - (i+1) * univec_propa[j][k];
+      }
+      if(j == 0 || j == nnodes-1){
+        AddNewNode(coord_of_inner_layer, CRACK_FACE, CRACK_SURFACE);
+      } else {
+        AddNewNode(coord_of_inner_layer, CRACK_FACE, OTHER);
+      }
+      if(i == NUMBER_OF_INNER_LAYERS-1){
+        AddInnerNode(coord_of_inner_layer);
+      }
+    }
+  }
+}
+
+void DecisionOfInOut(double temp_nnodes, double temp_nodes_coordinate[][DIMENSION])
+{
+  char buf[256];
+  WriteNodes(temp_nnodes, temp_nodes_coordinate);
+  sprintf(buf, "~/ADVENTURE/advauto_etc_new/autoage/hetare/gm3d/advautoage_h_gm3d_tri_inout2 %s %s %s", patch_file_name, INNEREST, INNERESTINOUT);
+  ReadNodesInOut(temp_nnodes);
+}
+
+void CalculateLaminationWeight(int temp_nnodes, double temp_p_to_p_vector[][DIMENSION], double temp_lamination_weight[])
+{
+  int i;
+  int max, min;
+  double temp_inner_product;
+  double temp_cross_product[DIMENSION];
+  double temp_cross_product_length;
+  double temp_value[NUMBER_OF_CRACKFRONT_POINTS];
+  double temp_temp_value[NUMBER_OF_CRACKFRONT_POINTS];
+  for(i = 1; i < temp_nnodes - 1; i++){
+    CrossProduct(temp_p_to_p_vector[i], temp_p_to_p_vector[i-1], temp_cross_product);
+    temp_inner_product = InnerProduct(temp_p_to_p_vector[i], temp_p_to_p_vector[i-1]);
+    temp_cross_product_length = GetVectorLength(temp_cross_product);
+    if(temp_inner_product < 0){
+      temp_value[i] = temp_cross_product_length;
+    } else {
+      temp_value[i] = 2 - temp_cross_product_length;
+    }
+    if(minus_flag[i] == 1){
+      temp_value[i] = -temp_value[i];
+    }
+  }
+  GetMaxandMin(1, temp_nnodes-1, temp_value, max, min);
+  for(i = 1; i < temp_nnodes - 1; i++){
+    temp_temp_value[i] = temp_value[i] - temp_value[min] + (temp_value[max] - temp_value[min])/10;
+    temp_lamination_weight[i] = temp_temp_value[i]/(temp_value[max] - temp_value[min]);
+  }
+}
+
+void LaminationLayer()
+{
+  int i,j;
+  int inside_count;
+  double lamination_scale_factor = layer_size * LAMINATIONSCALE;
+  double temp_innerest_nodes_coordinate[NUMBER_OF_CRACKFRONT_POINTS][DIMENSION];
+
+  number_of_innerest_nodes = number_of_inner_nodes;
+  for(i = 0; i < number_of_inner_nodes; i++){
+  innerest_nodes_coordinate[i][j] = inner_nodes_coordinate[i][j];
+  }
+  temp_count = 0;
+  ClearNewNodeFlag();
+
+  while(1){
+    ClearMinusFlag();
+    GetPointtoPointVector(number_of_innerest_nodes, innerest_nodes_coordinate, innerest_nodes_p_to_p_vector);
+    GetUnivectoratAllPoint(number_of_innerest_nodes, innerest_nodes_p_to_p_vector, innerest_univec_normal, innerest_univec_propa, innerest_univec_tangent);
+    CalculateLaminationWeight(number_of_innerest_nodes, innerest_nodes_p_to_p_vector, lamination_weight);
+    for(i = 1; i < number_of_innerest_nodes - 1; i++){
+      if(inout_flag[i] == 1){
+        for(j = 0; j < DIMENSION; j++){
+          innerest_nodes_coordinate[i][j] = innerest_nodes_coordinate[i][j] - lamination_scale_factor * lamination_weight[i] * innerest_univec_propa[i][j];
+        }
+        inside_count++;
+      }
+    }
+    GetLayerLength(number_of_innerest_nodes, innerest_nodes_coordinate);
+    for(i = 0; i < number_of_innerest_nodes - 1; i++){
+      if(layer_size * 0.5 > layer_length[i] || layer_size * 1.1 <layer_length[i]){
+        RearrangeLayer(number_of_innerest_nodes, innerest_nodes_coordinate);
+        break;
+      }
+    }
+    for(i = 1; i < number_of_innerest_nodes - 1; i++){
+    TempAddNewNode(innerest_nodes_coordinate[i]);
+    }
+    if(inside_count == 0) break;
+    ClearInOutFlag();
+    DecisionOfInOut(number_of_innerest_nodes, innerest_nodes_coordinate);
+  }
+  for(i = 1; i < number_of_innerest_nodes-1; i++){
+    AddNewNode(innerest_nodes_coordinate[i], CRACK_FACE, CRACK_SURFACE);
+  }
+}
+
+void LaminationPointsToNodes()
+{
+  int i, j;
+  double dist;
+  for(i = 0; i < number_of_inner_nodes; i++){
+    for(j = 0; j < temp_count; j++){
+      if(new_nodes_flag[j] == 1){
+        dist = Distance(inner_nodes_coordinate[i], temp_crackface_new_nodes_coordinate[j]);
+        if(dist < layer_size){
+          new_nodes_flag[i] = 0;
+        }
+      }
+    }
+  }
+  for(i = 0; i < number_of_innerest_nodes; i++){
+    for(j = 0; j < temp_count; j++){
+      if(new_nodes_flag[j] == 1){
+        dist = Distance(innerest_nodes_coordinate[i], temp_crackface_new_nodes_coordinate[j]);
+        if(dist < layer_size){
+          new_nodes_flag[i] = 0;
+        }
+      }
+    }
+  }
+  for(i = 0; i < temp_count; i++){
+    if(new_nodes_flag[i] == 1){
+      AddNewNode(temp_crackface_new_nodes_coordinate[i], CRACK_FACE, OTHER);
+      for(j = 0; j < temp_count; j++){
+        if(new_nodes_flag[j] == 1){
+          dist = Distance(temp_crackface_new_nodes_coordinate[i], temp_crackface_new_nodes_coordinate[j]);
+          if(dist < layer_size){
+            new_nodes_flag[j] = 0;
+          }
+        }
+      }
+    }
+  }
 }
 
 void PerformCommand()
 {
-  GetPointtoPointVector();
-  GetUnivectoratAllPoint();
+  ResisterCrackFrontNodes(nnodes, nodes_coordinate);
+  GetPointtoPointVector(nnodes, nodes_coordinate, p_to_p_vector);
+  GetUnivectoratAllPoint(nnodes, p_to_p_vector, univec_normal, univec_propa, univec_tangent);
   SetScaleFactor();
   VectorCorrectiontoSurface();
   MakeInOutLayer();
+
+  LaminationLayer();
+  LaminationPointsToNodes();
 }
 
 int main(int argc, char *argv[]){
   ReadNodes(argv[1]);//kawai.node
-  CleanUnivecMinusFlag();
+  ClearMinusFlag();
   ReadUnivector(argv[2]);//き裂の一番端の点の法線ベクトルの情報
   ReadPatch(argv[3]);
+  sprintf(patch_file_name, "%s", argv[3]);
   ReadCrackParam(argv[4]);//param.sc_ellipse_polygon3の読み込み
   //ReadVector(argv[3]);
 
   PerformCommand();
 
+  WriteCompleteNodes(argv[5]);
+  WriteCrackFlag(argv[6]);
+  WriteSurfaceFlag(argv[7]);
   return 0;
 }
