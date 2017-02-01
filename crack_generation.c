@@ -1,3 +1,21 @@
+/*
+ * crack_generation.c
+ * 初期き裂及び、合体後き裂のき裂面点群を生成するプログラム
+ * プログラムを回すのに必要な情報は、
+ * き裂前縁の点の座標を記した.nodeファイル
+ * き裂面の奥行き方向（き裂前縁点群の始点を右、終点を左として
+ * 上向きの半円を描くようなき裂とした時の奥行き方向）を記したベクトルファイル
+ * き裂を挿入するメッシュの表面パッチデータ.patch
+ * 積層距離や前縁点間距離等のパラメータを記したファイル
+ * である。
+ * 出力は生成したき裂面上の点群ファイル.nodeと
+ * き裂面についてのフラグ.nd_crack、
+ * き裂表面についてのフラグ.nd_surfである
+ */
+
+
+
+
 #include<stdio.h>
 #include<stdlib.h>
 #include<math.h>
@@ -138,6 +156,9 @@ void GetAverageVector(double a[], double b[], double c[])
   }
 }
 
+/*
+ * 入力したベクトルを単位ベクトルへと変換する
+ */
 void GetUnitVector(double a[])
 {
   double temp_amount;
@@ -348,6 +369,9 @@ void AddInnerNode(double new_nodes_coordinate[])
   number_of_inner_nodes++;
 }
 
+/*
+ * き裂前縁を.nodeとして登録
+ */
 void ResisterCrackFrontNodes(int total, double temp_nodes_coordinate[][DIMENSION])
 {
   int i;
@@ -473,7 +497,6 @@ void RearrangeLayer(int *total, double nodes_coordinate[][DIMENSION])
 
   vector_coefficient = layer_length[0];
       printf("vector_coefficient = %lf, layer_length[%d] = %lf\n", vector_coefficient, nodes_count, layer_length[nodes_count]);
-  nodes_count++;
   while(1){
     if(vector_coefficient >= 0){
       for(j = 0; j < DIMENSION; j++){
@@ -484,14 +507,15 @@ void RearrangeLayer(int *total, double nodes_coordinate[][DIMENSION])
       count++;
         //printf("temp_nodes_coordinate[%d] = (%lf, %lf, %lf)\n", count-1, temp_nodes_coordinate[count-1][0], temp_nodes_coordinate[count-1][1], temp_nodes_coordinate[count-1][2]);
     } else {
+      nodes_count++;
+      if((*total) - 1 == nodes_count) break;
       vector_coefficient = vector_coefficient + layer_length[nodes_count];
       printf("vector_coefficient = %lf, layer_length[%d] = %lf\n", vector_coefficient, nodes_count, layer_length[nodes_count]);
-      nodes_count++;
-      if(*total == nodes_count-1) break;
     }
   }
   for(j = 0; j < DIMENSION; j++){
-    temp_nodes_coordinate[count][j] = nodes_coordinate[*total][j];
+    temp_nodes_coordinate[count][j] = nodes_coordinate[(*total)-1][j];
+    count++;
   }
   for(i = 0; i < count; i++){
     for(j = 0; j < DIMENSION; j++){
@@ -526,6 +550,9 @@ void ReadVector(const char *filename)
 {
 }
 
+/*
+ * き裂前縁点の座標値を用いて始点から終点に向かう方向に１点ずつ点を結ぶベクトルを作成
+ */
 void GetPointtoPointVector(int temp_nnodes, double temp_nodes_coordinate[][DIMENSION], double temp_p_to_p_vector[][DIMENSION])
 {
   int i, j;
@@ -539,7 +566,9 @@ void GetPointtoPointVector(int temp_nnodes, double temp_nodes_coordinate[][DIMEN
   }
 }
 
-
+/*
+ *
+ */
 void SetScaleFactor()
 {
   scale_factor = layer_size * 2;
@@ -552,6 +581,9 @@ void ClearMinusFlag()
   }
 }
 
+/*
+ * 各前縁点における接線方向ベクトル、法線方向ベクトル、進展方向ベクトルを作成
+ */
 void GetUnivectoratAllPoint(int temp_nnodes, double temp_p_to_p_vector[][DIMENSION], double temp_univec_normal[][DIMENSION], double temp_univec_propa[][DIMENSION], double temp_univec_tangent[][DIMENSION])
 {
   int i, j;
@@ -700,6 +732,9 @@ void ComputeNormalNormalAndMovingVec(double CoordVec[3], double TanVec[3],
   //  printf("Moving Distance =  %10.3e\n",DistVec);
 }
 
+/*
+ * 始点と終点における進展方向ベクトルを表面に補正する関数
+ */
 void VectorCorrectiontoSurface()
 {
 
@@ -787,6 +822,9 @@ void VectorCorrectiontoSurface()
   }
 }
 
+/*
+ * き裂前縁からそれぞれ内側と外側に向けて２層ずつ積層させる関数
+ */
 void MakeInOutLayer()
 {
   int i,j,k;
@@ -882,6 +920,16 @@ void CalculateLaminationWeight(int temp_nnodes, double temp_p_to_p_vector[][DIME
   }
 }
 
+/*
+ * 積層させたうちの最も内側の層の各univec（進展方向、接線方向、法線方向ベクトルを総称してunivecとする）を算出、
+ * 進展方向のベクトルに負をかけ、形状に応じて重み付けした係数をかけて、積層の間隔の1/10だけ内側に層を作成
+ * もし点群が前縁の節点間距離とはかけ離れた間隔になった場合は再配置
+ * パッチを用いて内外判定、外側に出た点については次の積層時に移動しないものとする
+ * 以上を繰り返して層を作成した時に全ての点がパッチの外側に出たら終了
+ *
+ * 一番内側の層を更新していくことで積層を表現しているが、最後の全ての点がパッチの外に出た時の層をき裂表面点として扱う
+ * また、積層していく段階で更新された点も次のステップのために一時的に保管する
+ */
 void LaminationLayer()
 {
   int i,j;
@@ -947,6 +995,15 @@ int count;
   }
 }
 
+/*
+ * き裂面の点群を作る関数
+ * 前のステップで一時的に保存した点群に点フラグを与える
+ * まずき裂前縁の最も内側の層から一定距離以内にある点群の点フラグを削除
+ * 次にき裂表面の点群から一定距離以内にある点群の点フラグを削除
+ * それでも点フラグが残った点を順番に探索していき、
+ * 点フラグが残った点を選択したらその点の近くの点フラグを削除、
+ * を繰り返すことでき裂面に均一な密度の点群を生成する
+ */
 void LaminationPointsToNodes()
 {
   int i, j;
@@ -986,6 +1043,20 @@ void LaminationPointsToNodes()
   }
 }
 
+/*
+ * き裂面の点群を生成する関数
+ * 1. き裂前縁の.nodeへの登録
+ * 2. 始点から終点へかけて隣り合う点でのベクトル生成
+ * 3. 2.で生成したベクトルを利用して、各前縁点における接線方向ベクトル、法線方向ベクトル、進展方向ベクトルを作成
+ * 4. ScaleFactor(積層距離を定めるパラメータ)を定義
+ * 5. き裂前縁の始点と終点における進展方向ベクトルを表面パッチを利用して表面方向に補正
+ * 6. き裂前縁から内側と外側に何層かずつ進展方向ベクトルを用いて積層（このプログラムでは内外それぞれ２層ずつ）
+ * 7. 積層させたもののうち最も内側のものからさらに内側に向けて進展ベクトルを逐次計算し積層
+ *    このとき、6.で用いた積層間距離の1/10とかなり細かく積層させ、それを保持
+ *    表面パッチを利用して内外判定、内側へ積層させ続けて、全ての点が表面に達したら終了
+ * 8. 7.で細かく保持させていた
+ * のようなステップで構成される
+ */
 void PerformCommand()
 {
   ResisterCrackFrontNodes(nnodes, nodes_coordinate);
@@ -1001,15 +1072,14 @@ void PerformCommand()
 }
 
 int main(int argc, char *argv[]){
-  ReadNodes(argv[1]);//kawai.node
-  ClearMinusFlag();
+  ReadNodes(argv[1]);//き裂前縁点群の座標値を記した.nodeの読み込み
   ReadUnivector(argv[2]);//き裂の一番端の点の法線ベクトルの情報
-  ReadPatch(argv[3]);
+  ReadPatch(argv[3]);//き裂が入ってるメッシュファイルの表面パッチ.patch
   sprintf(patch_file_name, "%s", argv[3]);
   ReadCrackParam(argv[4]);//param.sc_ellipse_polygon3の読み込み
   //ReadVector(argv[3]);
 
-  PerformCommand();
+  PerformCommand();//き裂面点群の生成
 
   WriteCompleteNodes(argv[5]);
   WriteCrackFlag(argv[6]);
