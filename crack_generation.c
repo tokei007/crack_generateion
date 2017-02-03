@@ -380,6 +380,7 @@ void AddNewNode(double new_nodes_coordinate[], double new_normal_vector[], int t
   crack_flag[completed_nnodes] = temp_crack_flag;
   surface_flag[completed_nnodes] = temp_surface_flag;
   completed_nnodes++;
+  assert(completed_nnodes < NUMBER_OF_CRACK_POINTS);
 }
 
 void TempAddNewNode(double new_nodes_coordinate[], double new_normal_vector[])
@@ -682,10 +683,10 @@ void GetUnivectoratAllPoint(int temp_nnodes, double temp_p_to_p_vector[][DIMENSI
     GetUnitVector(temp_univec_normal[i]);
     CrossProduct(temp_univec_normal[i], temp_univec_tangent[i], temp_univec_propa[i]);
     GetUnitVector(temp_univec_propa[i]);
-    //printf("temp_univec_normal[%d] = (%lf, %lf, %lf)\ntemp_univec_propa[%d] = (%lf, %lf, %lf)\ntemp_univec_tangent[%d] = (%lf, %lf, %lf)\n", i, temp_univec_normal[i][0], temp_univec_normal[i][1], temp_univec_normal[i][2], i, temp_univec_tangent[i][0], temp_univec_tangent[i][1], temp_univec_tangent[i][2], i, temp_univec_propa[i][0], temp_univec_propa[i][1], temp_univec_propa[i][2]);
+    //printf("temp_univec_normal[%d] = (%.16lf, %.16lf, %.16lf)\ntemp_univec_propa[%d] = (%.16lf, %.16lf, %.16lf)\ntemp_univec_tangent[%d] = (%.16lf, %.16lf, %.16lf)\n", i, temp_univec_normal[i][0], temp_univec_normal[i][1], temp_univec_normal[i][2], i, temp_univec_tangent[i][0], temp_univec_tangent[i][1], temp_univec_tangent[i][2], i, temp_univec_propa[i][0], temp_univec_propa[i][1], temp_univec_propa[i][2]);
   }
-
   for(j = 0; j < DIMENSION; j++){
+    temp_univec_normal[0][j] = temp_univec_normal[1][j];
     temp_univec_tangent[temp_nnodes-1][j] = temp_p_to_p_vector[temp_nnodes-2][j];
     temp_univec_normal[temp_nnodes-1][j] = temp_univec_normal[temp_nnodes-2][j];
   }
@@ -985,9 +986,9 @@ void CalculateLaminationWeight(int temp_nnodes, double temp_p_to_p_vector[][DIME
   GetMaxandMin(1, temp_nnodes-1, temp_value, &max, &min);
   //printf("##max = %d, min = %d\n", max, min);
   for(i = 1; i < temp_nnodes - 1; i++){
-    temp_temp_value[i] = temp_value[i] - temp_value[min] + (temp_value[max] - temp_value[min])/10;
+    temp_temp_value[i] = temp_value[i] - temp_value[min];
     //printf("temp_temp_value[%d] = %lf\n", i, temp_temp_value[i]);
-    temp_lamination_weight[i] = temp_temp_value[i]/(1.1 * (temp_value[max] - temp_value[min]));
+    temp_lamination_weight[i] = temp_temp_value[i]/(temp_value[max] - temp_value[min]);
     //printf("temp_lamination_weight[%d] = %lf\n", i, temp_lamination_weight[i]);
   }
 }
@@ -1074,8 +1075,8 @@ void LaminationLayer()
   ClearNewNodeFlag();
   ClearInOutFlag();
   int count;
-  //for(count = 0; count <200; count++){
-  while(1){
+  for(count = 0; count < 800; count++){
+  //while(1){
     inside_count = 0;
     ClearMinusFlag();
     for(i = 1; i < number_of_innerest_nodes - 1; i++){
@@ -1116,7 +1117,7 @@ void LaminationLayer()
       //printf("\n");
     }
     CalculateLaminationWeight(number_of_innerest_nodes, innerest_nodes_p_to_p_vector, lamination_weight);
-    WeightedAverageUnivec(number_of_innerest_nodes, univec_propa, lamination_weight);
+    //WeightedAverageUnivec(number_of_innerest_nodes, univec_propa, lamination_weight);
     for(i = 1; i < number_of_innerest_nodes - 1; i++){
       TempAddNewNode(innerest_nodes_coordinate[i], innerest_univec_normal[i]);
     }
@@ -1208,9 +1209,9 @@ void PerformCommand()
   GetPointtoPointVector(nnodes, nodes_coordinate, p_to_p_vector);
   GetUnivectoratAllPoint(nnodes, p_to_p_vector, univec_normal, univec_propa, univec_tangent);
   SetScaleFactor();
-  VectorCorrectiontoSurface();
-  GetAverageVector(univec_propa[0], univec_propa[1], univec_propa[1]);
-  GetAverageVector(univec_propa[nnodes-1], univec_propa[nnodes-2], univec_propa[nnodes-2]);
+  //VectorCorrectiontoSurface();
+  //GetAverageVector(univec_propa[0], univec_propa[1], univec_propa[1]);
+  //GetAverageVector(univec_propa[nnodes-1], univec_propa[nnodes-2], univec_propa[nnodes-2]);
   ResisterCrackFrontNodes(nnodes, nodes_coordinate, univec_normal);
   MakeInOutLayer();
 
