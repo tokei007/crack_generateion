@@ -679,10 +679,7 @@ void GetUnivectoratAllPoint(int temp_nnodes, double temp_p_to_p_vector[][DIMENSI
       minus_flag[i] = 1;
     }
     GetAverageVector(temp_p_to_p_vector[i-1], temp_p_to_p_vector[i], temp_univec_tangent[i]);
-    //GetUnitVector(temp_univec_normal[i]);
-      temp_univec_normal[i][0] = 0.000000;
-      temp_univec_normal[i][1] = -1.000000;
-      temp_univec_normal[i][2] = 0.000000;
+    GetUnitVector(temp_univec_normal[i]);
     CrossProduct(temp_univec_normal[i], temp_univec_tangent[i], temp_univec_propa[i]);
     GetUnitVector(temp_univec_propa[i]);
     //printf("temp_univec_normal[%d] = (%lf, %lf, %lf)\ntemp_univec_propa[%d] = (%lf, %lf, %lf)\ntemp_univec_tangent[%d] = (%lf, %lf, %lf)\n", i, temp_univec_normal[i][0], temp_univec_normal[i][1], temp_univec_normal[i][2], i, temp_univec_tangent[i][0], temp_univec_tangent[i][1], temp_univec_tangent[i][2], i, temp_univec_propa[i][0], temp_univec_propa[i][1], temp_univec_propa[i][2]);
@@ -995,6 +992,54 @@ void CalculateLaminationWeight(int temp_nnodes, double temp_p_to_p_vector[][DIME
   }
 }
 
+void GetAverageVectorNearByPoints(int total, int search_points, double univec[][DIMENSION])
+{
+  int i,j,k;
+  int max,min;
+  int count;
+  double temp_univec[NUMBER_OF_CRACKFRONT_POINTS][DIMENSION];
+  for(i = 0; i < total; i++){
+    count = 0;
+    max = i + search_points;
+    min = i - search_points;
+    if(max > total-1) max = total-1;
+    if(min < 0) min = 0;
+    for(j = min; j <= max; j++){
+      for(k = 0; k < DIMENSION; k++){
+        temp_univec[j][k] += univec[j][k];
+      }
+      count++;
+    }
+    for(k = 0; k < DIMENSION; k++){
+      temp_univec[j][k] /= count;
+    }
+  }
+  for(i = 0; i < total; i++){
+    for(j = 0; j < DIMENSION; j++){
+      univec[i][j] = temp_univec[i][j]; 
+    }
+  }
+}
+
+void WeightedAverageUnivec(int total, double univec[][DIMENSION], double lamination_weight[])
+{
+  int i, j;
+  int number_of_search_points = total/10 + 0.5;//10は適当に決めたmagic_numberです
+  double temp_univec[NUMBER_OF_CRACKFRONT_POINTS][DIMENSION];
+  for(i = 0; i < total; i++){
+    for(j = 0; j < DIMENSION; j++){
+    temp_univec[i][j] = univec[i][j] * lamination_weight[i];
+    }
+  }
+  GetAverageVectorNearByPoints(total, number_of_search_points, temp_univec);
+  for(i = 0; i < total; i++){
+    for(j = 0; j < DIMENSION; j++){
+    univec[i][j] = temp_univec[i][j];
+    }
+  GetUnitVector(univec[i]);
+  }
+}
+
 /*
  * 積層させたうちの最も内側の層の各univec（進展方向、接線方向、法線方向ベクトルを総称してunivecとする）を算出、
  * 進展方向のベクトルに負をかけ、形状に応じて重み付けした係数をかけて、積層の間隔の1/10だけ内側に層を作成
@@ -1071,6 +1116,7 @@ void LaminationLayer()
       //printf("\n");
     }
     CalculateLaminationWeight(number_of_innerest_nodes, innerest_nodes_p_to_p_vector, lamination_weight);
+    WeightedAverageUnivec(number_of_innerest_nodes, univec_propa, lamination_weight);
     for(i = 1; i < number_of_innerest_nodes - 1; i++){
       TempAddNewNode(innerest_nodes_coordinate[i], innerest_univec_normal[i]);
     }
