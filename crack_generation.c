@@ -50,7 +50,7 @@ int small_normal_flag[NUMBER_OF_CRACKFRONT_POINTS];
 int crack_flag[NUMBER_OF_CRACK_POINTS];
 int surface_flag[NUMBER_OF_CRACK_POINTS];
 int new_nodes_flag[NUMBER_OF_LAMINATION_POINTS];
-int *initial_flag;
+int initial_flag;
 double nodes_coordinate[NUMBER_OF_CRACKFRONT_POINTS][DIMENSION];
 double completed_nodes_coordinate[NUMBER_OF_CRACK_POINTS][DIMENSION];
 double completed_normal_vector[NUMBER_OF_CRACK_POINTS][DIMENSION];
@@ -179,7 +179,6 @@ void GetUnitVector(double a[])
 void ReadNodes(const char *filename)
 {
   int i,nodeid[NUMBER_OF_CRACKFRONT_POINTS];
-  double dummy;
   FILE *fp;
 
   fp = fopen (filename,"r");
@@ -232,6 +231,7 @@ void ReadPatch(const char *fileName)
   int idummy;
 
   fp = fopen (fileName, "r");
+  assert(fp!=NULL);
 
   fscanf(fp,"%d", &npatch);
 
@@ -252,7 +252,7 @@ void WriteNodes(int total, double nodes_coordinate[][DIMENSION])
 {
   const char filename[200] = "___temp_innerest.node";
   FILE *fp;
-  int inode,idir;
+  int inode;
 
   fp = fopen(filename, "w");
 
@@ -291,9 +291,10 @@ void ReadNodesInOut(int total)
 void WriteCompleteNodes(const char *filename)
 {
   FILE *fp;
-  int inode,idir;
+  int inode;
 
   fp = fopen(filename, "w");
+  assert(fp!=NULL);
 
   fprintf(fp, "%d\n", completed_nnodes);
 
@@ -309,6 +310,7 @@ void WriteCrackFlag(const char *filename)
   int inode;
 
   fp = fopen(filename, "w");
+  assert(fp!=NULL);
 
   fprintf(fp, "%d\n", completed_nnodes);
 
@@ -324,6 +326,7 @@ void WriteCrackFrontFlag(const char *filename)
   int inode;
 
   fp = fopen(filename, "w");
+  assert(fp!=NULL);
 
   fprintf(fp, "%d\n", completed_nnodes);
 
@@ -344,6 +347,7 @@ void WriteSurfaceFlag(const char *filename)
   int inode;
 
   fp = fopen(filename, "w");
+  assert(fp!=NULL);
 
   fprintf(fp, "%d\n", completed_nnodes);
 
@@ -359,6 +363,7 @@ void WriteNormal(const char *filename)
   int inode;
 
   fp  = fopen(filename, "w");
+  assert(fp!=NULL);
 
   fprintf(fp, "%d\n", completed_nnodes);
 
@@ -453,7 +458,7 @@ void ResisterCrackFrontNodes(int total, double temp_nodes_coordinate[][DIMENSION
 //patch_cgとして表面パッチの重心を登録
 void CompPatchCG(void)
 {
-  int iPatch, inode, idir;
+  int iPatch, idir;
 
   for(iPatch=0; iPatch < npatch; iPatch++)
     for(idir=0; idir<3; idir++)
@@ -531,8 +536,6 @@ int CompCrossingPt_TriangleAndLine(double vecA[3], double vecB[3],
 void GetLayerLength(int total, double nodes_coordinate[][DIMENSION])
 {
   int i, j;
-  double value;
-  double sum;
   double temp_vector[DIMENSION];
   for(i = 0; i < total - 1; i++){
     for(j = 0; j < DIMENSION; j++){
@@ -579,8 +582,8 @@ void RearrangeLayer(int *total, double nodes_coordinate[][DIMENSION])
         temp_nodes_coordinate[count][j] = nodes_coordinate[nodes_count][j] + vector_coefficient/layer_length[nodes_count] * (nodes_coordinate[nodes_count+1][j] - nodes_coordinate[nodes_count][j]);
       }
       distance =  Distance(temp_nodes_coordinate[count], temp_nodes_coordinate[count-1]);
-      //printf("vector_coefficient = %lf\n", vector_coefficient);
-      //printf("temp_nodes_coordinate[%d] = ( %lf %lf %lf )\n", count, temp_nodes_coordinate[count][0], temp_nodes_coordinate[count][1], temp_nodes_coordinate[count][2]);
+      printf("vector_coefficient = %lf\n", vector_coefficient);
+      printf("temp_nodes_coordinate[%d] = ( %lf %lf %lf )\n", count, temp_nodes_coordinate[count][0], temp_nodes_coordinate[count][1], temp_nodes_coordinate[count][2]);
       //printf("distance = %lf\n", distance);
       vector_coefficient = vector_coefficient + temp_nodal_distance;
       //printf("vector_coefficient = %lf, temp_nodal_distance = %lf\n", vector_coefficient, temp_nodal_distance);
@@ -589,15 +592,16 @@ void RearrangeLayer(int *total, double nodes_coordinate[][DIMENSION])
       if((*total) - 1 == nodes_count) break;
       vector_coefficient = vector_coefficient - layer_length[nodes_count];
       nodes_count++;
-      //printf("vector_coefficient = %lf, layer_length[%d] = %lf\n", vector_coefficient, nodes_count, layer_length[nodes_count]);
+      printf("vector_coefficient = %lf, layer_length[%d] = %lf\n", vector_coefficient, nodes_count, layer_length[nodes_count]);
     }
   }
- count--; 
+  if(Distance(nodes_coordinate[(*total)-1], temp_nodes_coordinate[count-1]) > EPS){
   for(j = 0; j < DIMENSION; j++){
     temp_nodes_coordinate[count][j] = nodes_coordinate[(*total)-1][j];
   }
-  //printf("temp_nodes_coordinate[%d] = ( %lf %lf %lf )\n", count, temp_nodes_coordinate[count][0], temp_nodes_coordinate[count][1], temp_nodes_coordinate[count][2]);
-    count++;
+  printf("temp_nodes_coordinate[%d] = ( %lf %lf %lf )\n", count, temp_nodes_coordinate[count][0], temp_nodes_coordinate[count][1], temp_nodes_coordinate[count][2]);
+  count++;
+  }
 
   for(i = 0; i < count; i++){
     for(j = 0; j < DIMENSION; j++){
@@ -605,7 +609,7 @@ void RearrangeLayer(int *total, double nodes_coordinate[][DIMENSION])
     }
   }
   *total = count;
-  //printf("number of nodes after rearrange = %d\n", count);
+  printf("number of nodes after rearrange = %d\n", count);
 }
 
 //き裂前縁メッシュサイズ及び層間距離読み込み
@@ -641,10 +645,10 @@ void GetPointtoPointVector(int temp_nnodes, double temp_nodes_coordinate[][DIMEN
   for(i = 0; i < temp_nnodes-1; i++){
     for(j = 0; j < DIMENSION; j++){
       temp_p_to_p_vector[i][j] = temp_nodes_coordinate[i+1][j] - temp_nodes_coordinate[i][j];
-      //printf("##temp_p_to_p_vector[%d][%d] = temp_nodes_coordinate[%d][%d] - temp_nodes_coordinate[%d][%d]\n%lf = %lf - %lf\n", i, j, i+1, j, i, j, temp_p_to_p_vector[i][j], temp_nodes_coordinate[i+1][j], temp_nodes_coordinate[i][j]);
+      printf("##temp_p_to_p_vector[%d][%d] = temp_nodes_coordinate[%d][%d] - temp_nodes_coordinate[%d][%d]\n%lf = %lf - %lf\n", i, j, i+1, j, i, j, temp_p_to_p_vector[i][j], temp_nodes_coordinate[i+1][j], temp_nodes_coordinate[i][j]);
     }
       GetUnitVector(temp_p_to_p_vector[i]);
-    //printf("##%dto%dvector = (%lf, %lf, %lf)\n", i, i+1, temp_p_to_p_vector[i][0],temp_p_to_p_vector[i][1],temp_p_to_p_vector[i][2]);
+    printf("##%dto%dvector = (%lf, %lf, %lf)\n", i, i+1, temp_p_to_p_vector[i][0],temp_p_to_p_vector[i][1],temp_p_to_p_vector[i][2]);
   }
 }
 
@@ -666,23 +670,28 @@ void ClearMinusFlag()
 /*
  * 各前縁点における接線方向ベクトル、法線方向ベクトル、進展方向ベクトルを作成
  */
-void GetUnivectoratAllPoint(int temp_nnodes, double temp_p_to_p_vector[][DIMENSION], double temp_univec_normal[][DIMENSION], double temp_univec_propa[][DIMENSION], double temp_univec_tangent[][DIMENSION])
+void GetUnivectoratAllPoint(int temp_nnodes, double temp_p_to_p_vector[][DIMENSION], double temp_univec_normal[][DIMENSION], double temp_univec_propa[][DIMENSION], double temp_univec_tangent[][DIMENSION], double approx_factor)
 {
-  int i, j, k;
+  int i, j, k, l;
   double product;
   ClearSmallNormalFlag();
   //printf("temp_univec_normal = ( %lf %lf %lf)\n", temp_univec_normal[0][0], temp_univec_normal[0][1], temp_univec_normal[0][2]);
 
 
+    //printf("temp_univec_normal[%d] = (%.16lf, %.16lf, %.16lf)\n", 0, temp_univec_normal[0][0], temp_univec_normal[0][1], temp_univec_normal[0][2]);
   for(i = 1; i < temp_nnodes - 1; i++){
     GetAverageVector(temp_p_to_p_vector[i-1], temp_p_to_p_vector[i], temp_univec_tangent[i]);
     CrossProduct(temp_p_to_p_vector[i], temp_p_to_p_vector[i-1], temp_univec_normal[i]);
+    //printf("temp_p_to_p_vector[%d] = ( %lf %lf %lf )\n", i, temp_p_to_p_vector[i][0], temp_p_to_p_vector[i][1], temp_p_to_p_vector[i][2]);
+    //printf("temp_univec_normal[%d] = (%.16lf, %.16lf, %.16lf)\n", i, temp_univec_normal[i][0], temp_univec_normal[i][1], temp_univec_normal[i][2]);
     product = InnerProduct(temp_univec_normal[i], temp_univec_normal[i-1]);
-    if(fabs(GetVectorLength(temp_univec_normal[i])) < 0.1){
+    //printf("product = %lf\n", product);
+    if(fabs(GetVectorLength(temp_univec_normal[i])) < approx_factor){
       for(j = 0; j < DIMENSION; j++){
         temp_univec_normal[i][j] = temp_univec_normal[i-1][j];
       }
       small_normal_flag[i] = 1;
+      //printf("small flagged\n");
       if(product < 0) minus_flag[i] = 1;
       continue;
     } else {
@@ -693,12 +702,15 @@ void GetUnivectoratAllPoint(int temp_nnodes, double temp_p_to_p_vector[][DIMENSI
         minus_flag[i] = 1;
       }
     }
+    //printf("temp_univec_normal[%d] = (%.16lf, %.16lf, %.16lf)\n", i, temp_univec_normal[i][0], temp_univec_normal[i][1], temp_univec_normal[i][2]);
     GetUnitVector(temp_univec_normal[i]);
     CrossProduct(temp_univec_normal[i], temp_univec_tangent[i], temp_univec_propa[i]);
     GetUnitVector(temp_univec_propa[i]);
-    //printf("temp_univec_normal[%d] = (%.16lf, %.16lf, %.16lf)\ntemp_univec_propa[%d] = (%.16lf, %.16lf, %.16lf)\ntemp_univec_tangent[%d] = (%.16lf, %.16lf, %.16lf)\n", i, temp_univec_normal[i][0], temp_univec_normal[i][1], temp_univec_normal[i][2], i, temp_univec_tangent[i][0], temp_univec_tangent[i][1], temp_univec_tangent[i][2], i, temp_univec_propa[i][0], temp_univec_propa[i][1], temp_univec_propa[i][2]);
+    //printf("temp_univec_normal[%d] = (%.16lf, %.16lf, %.16lf)\n", i, temp_univec_normal[i][0], temp_univec_normal[i][1], temp_univec_normal[i][2]);
+    //printf("temp_univec_tangent[%d] = (%.16lf, %.16lf, %.16lf)\n", i, temp_univec_tangent[i][0], temp_univec_tangent[i][1], temp_univec_tangent[i][2]);
+    //printf("temp_univec_propa[%d] = (%.16lf, %.16lf, %.16lf)\n", i, temp_univec_propa[i][0], temp_univec_propa[i][1], temp_univec_propa[i][2]);
   }
-  if(*initial_flag == 0){
+  if(initial_flag == 0){
     for(i = 1; i < temp_nnodes; i++){
       if(small_normal_flag[i] != 1){
         for(j = 0; j < DIMENSION; j++){
@@ -715,7 +727,7 @@ void GetUnivectoratAllPoint(int temp_nnodes, double temp_p_to_p_vector[][DIMENSI
         break;
       }
     }
-    *initial_flag = 1;
+    initial_flag = 1;
   }
   for(j = 0; j < DIMENSION; j++){
     temp_univec_tangent[0][j] = temp_p_to_p_vector[0][j];
@@ -724,16 +736,26 @@ void GetUnivectoratAllPoint(int temp_nnodes, double temp_p_to_p_vector[][DIMENSI
   CrossProduct(temp_univec_normal[0], temp_univec_tangent[0], temp_univec_propa[0]);
   GetUnitVector(temp_univec_propa[0]);
   CrossProduct(temp_univec_normal[temp_nnodes-1], temp_univec_tangent[temp_nnodes-1], temp_univec_propa[temp_nnodes-1]);
+    //printf("temp_univec_normal[%d] = (%.16lf, %.16lf, %.16lf)\n", temp_nnodes-1, temp_univec_normal[temp_nnodes][0], temp_univec_normal[temp_nnodes-1][1], temp_univec_normal[temp_nnodes-1][2]);
   GetUnitVector(temp_univec_propa[temp_nnodes-1]);
   for(i = 1; i < temp_nnodes - 1; i++){
     if(small_normal_flag[i] == 1){
       for(j = i+1; j < temp_nnodes - 1; j++){
         if(small_normal_flag[j] != 1){
-          for(k = 0; k < DIMENSION; k++){
-            temp_univec_normal[i][k] = (temp_univec_normal[j][k] + temp_univec_normal[i-1][k]) / 2;
-            temp_univec_propa[i][k] = (temp_univec_propa[j][k] + temp_univec_propa[i-1][k]) / 2;
+          for(k = i-1; k >= 0; k--){
+            if(small_normal_flag[k] != 1){
+              for(l = 0; l < DIMENSION; l++){
+                temp_univec_normal[i][l] = (temp_univec_normal[j][l] + temp_univec_normal[k][l]) / 2;
+                temp_univec_propa[i][l] = (temp_univec_propa[j][l] + temp_univec_propa[k][l]) / 2;
+              }
+              GetUnitVector(temp_univec_normal[i]);
+              GetUnitVector(temp_univec_propa[i]);
+            }
           }
-          break;
+    //printf("temp_univec_normal[%d] = (%.16lf, %.16lf, %.16lf)\n", i, temp_univec_normal[i][0], temp_univec_normal[i][1], temp_univec_normal[i][2]);
+    //printf("temp_univec_tangent[%d] = (%.16lf, %.16lf, %.16lf)\n", i, temp_univec_tangent[i][0], temp_univec_tangent[i][1], temp_univec_tangent[i][2]);
+    //printf("temp_univec_propa[%d] = (%.16lf, %.16lf, %.16lf)\n", i, temp_univec_propa[i][0], temp_univec_propa[i][1], temp_univec_propa[i][2]);
+    break;
         }
       }
     }
@@ -857,7 +879,7 @@ void ComputeNormalNormalAndMovingVec(double CoordVec[3], double TanVec[3],
 void VectorCorrectiontoSurface()
 {
 
-  int i,j;
+  int i;
   double CoordVecStart[3], CoordVecEnd[3]; 
   double AdvCoordVecStart1[3], AdvCoordVecEnd1[3];
   double AdvCoordVecStart2[3], AdvCoordVecEnd2[3];
@@ -868,7 +890,7 @@ void VectorCorrectiontoSurface()
   double AdvVecStart1[3], AdvVecEnd1[3];
   double AdvVecStart2[3], AdvVecEnd2[3];
   double weight1=0.5, weight2=0.5;
-  double DistVecStart, DistVecEnd;
+  double DistVecStart = 0.0, DistVecEnd = 0.0;
 
   //き裂前縁端の点２点をStartとEndとして登録
   //それぞれ、隣の点から端の点へと向かうベクトルをTanVecとして登録
@@ -1018,7 +1040,7 @@ void CalculateLaminationWeight(int temp_nnodes, double temp_p_to_p_vector[][DIME
     temp_inner_product = InnerProduct(temp_p_to_p_vector[i], temp_p_to_p_vector[i-1]);
     //printf("temp_inner_product = %lf\n", temp_inner_product);
     temp_cross_product_length = GetVectorLength(temp_cross_product);
-    //printf("temp_cross_product_length = %lf", temp_cross_product_length);
+    //printf("temp_cross_product_length = %lf\n", temp_cross_product_length);
     if(temp_inner_product >= 0){
       temp_value[i] = temp_cross_product_length;
     } else {
@@ -1029,8 +1051,9 @@ void CalculateLaminationWeight(int temp_nnodes, double temp_p_to_p_vector[][DIME
     }
     if(temp_value[i] < EPS){
       temp_value[i] = temp_value[i] / 10;
-      //printf("temp_value[%d] = %lf\n", i, temp_value[i]);
     }
+      //printf("temp_value[%d] = %lf\n", i, temp_value[i]);
+  }
     GetMaxandMin(1, temp_nnodes-1, temp_value, &max, &min);
     //printf("##max = %d, min = %d\n", max, min);
     if(temp_value[max] - temp_value[min] < EPS){
@@ -1045,7 +1068,7 @@ void CalculateLaminationWeight(int temp_nnodes, double temp_p_to_p_vector[][DIME
         //printf("temp_lamination_weight[%d] = %lf\n", i, temp_lamination_weight[i]);
       }
     }
-  }
+  
 }
 
 void GetAverageVectorNearByPoints(int total, int search_points, double univec[][DIMENSION])
@@ -1110,11 +1133,14 @@ void LaminationLayer()
 {
   int i,j;
   int inside_count;
-  int rearrange_count = 0;
   double lamination_scale_factor = layer_size * LAMINATIONSCALE;
   double temp_innerest_nodes_coordinate[NUMBER_OF_CRACKFRONT_POINTS][DIMENSION];
 
+  initial_flag = 0;
   number_of_innerest_nodes = number_of_inner_nodes;
+  for(i = 0; i < DIMENSION; i++){
+    innerest_univec_normal[0][i] = univec_normal[0][i];
+  }
   for(i = 0; i < number_of_inner_nodes; i++){
     for(j = 0; j < DIMENSION;j++){
       innerest_nodes_coordinate[i][j] = inner_nodes_coordinate[i][j];
@@ -1122,7 +1148,7 @@ void LaminationLayer()
   }    
   
   GetPointtoPointVector(number_of_innerest_nodes, innerest_nodes_coordinate, innerest_nodes_p_to_p_vector);
-    GetUnivectoratAllPoint(number_of_innerest_nodes, innerest_nodes_p_to_p_vector, innerest_univec_normal, innerest_univec_propa, innerest_univec_tangent);
+    GetUnivectoratAllPoint(number_of_innerest_nodes, innerest_nodes_p_to_p_vector, innerest_univec_normal, innerest_univec_propa, innerest_univec_tangent, 0.1);
     CalculateLaminationWeight(number_of_innerest_nodes, innerest_nodes_p_to_p_vector, lamination_weight);
 
 
@@ -1130,7 +1156,8 @@ void LaminationLayer()
   ClearNewNodeFlag();
   ClearInOutFlag();
   int count;
-  for(count = 0; count < 800; count++){
+  for(count = 0; count < 300; count++){
+    printf("count = %d\n", count);
   //while(1){
     inside_count = 0;
     ClearMinusFlag();
@@ -1140,7 +1167,7 @@ void LaminationLayer()
         //printf("inout_flag[%d] = %d\n", i, inout_flag[i]);
         for(j = 0; j < DIMENSION; j++){
           temp_innerest_nodes_coordinate[i][j] = innerest_nodes_coordinate[i][j] - lamination_scale_factor * lamination_weight[i] * innerest_univec_propa[i][j];
-          //printf("temp_innerest_nodes_coordinate[%d][%d] = innerest_nodes_coordinate[%d][%d] - lamination_scale_factor * lamination_weight[%d] * innerest_univec_propa[%d][%d]\n%lf = %lf - %lf * %lf * %lf\n", i, j, i, j, i, i, j, temp_innerest_nodes_coordinate[i][j], innerest_nodes_coordinate[i][j], lamination_scale_factor, lamination_weight[i], innerest_univec_propa[i][j]);
+          printf("temp_innerest_nodes_coordinate[%d][%d] = innerest_nodes_coordinate[%d][%d] - lamination_scale_factor * lamination_weight[%d] * innerest_univec_propa[%d][%d]\n%lf = %lf - %lf * %lf * %lf\n", i, j, i, j, i, i, j, temp_innerest_nodes_coordinate[i][j], innerest_nodes_coordinate[i][j], lamination_scale_factor, lamination_weight[i], innerest_univec_propa[i][j]);
           innerest_nodes_coordinate[i][j] = temp_innerest_nodes_coordinate[i][j];
         }
         inside_count++;
@@ -1157,12 +1184,13 @@ void LaminationLayer()
       if(layer_size * 0.8 > layer_length[i] || layer_size * 1.2 < layer_length[i]){
         RearrangeLayer(&number_of_innerest_nodes, innerest_nodes_coordinate);
         printf("Rearranged Layer\n");
+        initial_flag = 0;
         break;
       }
     }    
     
     GetPointtoPointVector(number_of_innerest_nodes, innerest_nodes_coordinate, innerest_nodes_p_to_p_vector);
-    GetUnivectoratAllPoint(number_of_innerest_nodes, innerest_nodes_p_to_p_vector, innerest_univec_normal, innerest_univec_propa, innerest_univec_tangent);
+    GetUnivectoratAllPoint(number_of_innerest_nodes, innerest_nodes_p_to_p_vector, innerest_univec_normal, innerest_univec_propa, innerest_univec_tangent, 0.1);
 
     //printf("innerest_univec_normal\n");
     for(i = 1; i < number_of_innerest_nodes - 1; i++){
@@ -1207,7 +1235,7 @@ void LaminationPointsToNodes()
         dist = Distance(inner_nodes_coordinate[i], temp_crackface_new_nodes_coordinate[j]);
         //printf("dist = %lf\n", dist);
         if(dist < layer_size){
-                    new_nodes_flag[j] = 0;
+//                    new_nodes_flag[j] = 0;
           //printf("##panished flag\n");
         }
       }
@@ -1220,7 +1248,7 @@ void LaminationPointsToNodes()
         dist = Distance(innerest_nodes_coordinate[i], temp_crackface_new_nodes_coordinate[j]);
         //printf("dist = %lf\n", dist);
         if(dist < layer_size*0.8){
-          new_nodes_flag[j] = 0;
+//          new_nodes_flag[j] = 0;
           //printf("##panished flag\n");
         }
       }
@@ -1235,7 +1263,7 @@ void LaminationPointsToNodes()
           dist = Distance(temp_crackface_new_nodes_coordinate[i], temp_crackface_new_nodes_coordinate[j]);
         //printf("dist = %lf\n", dist);
           if(dist < layer_size){
-            new_nodes_flag[j] = 0;
+//            new_nodes_flag[j] = 0;
           //printf("##panished flag\n");
           }
         }
@@ -1266,13 +1294,13 @@ void PerformCommand()
   for(i = 0; i < DIMENSION; i++){
     univec_normal[0][i] = init_univec_normal[i];
   }
-  *initial_flag = 0;
+  initial_flag = 0;
   GetUnitVector(univec_normal[0]);
-  GetUnivectoratAllPoint(nnodes, p_to_p_vector, univec_normal, univec_propa, univec_tangent);
+  GetUnivectoratAllPoint(nnodes, p_to_p_vector, univec_normal, univec_propa, univec_tangent, 0.01);
   SetScaleFactor();
-  //VectorCorrectiontoSurface();
-  //GetAverageVector(univec_propa[0], univec_propa[1], univec_propa[1]);
-  //GetAverageVector(univec_propa[nnodes-1], univec_propa[nnodes-2], univec_propa[nnodes-2]);
+  VectorCorrectiontoSurface();
+  GetAverageVector(univec_propa[0], univec_propa[1], univec_propa[1]);
+  GetAverageVector(univec_propa[nnodes-1], univec_propa[nnodes-2], univec_propa[nnodes-2]);
   ResisterCrackFrontNodes(nnodes, nodes_coordinate, univec_normal);
   MakeInOutLayer();
 
@@ -1296,5 +1324,6 @@ int main(int argc, char *argv[]){
   WriteSurfaceFlag(argv[7]);
   WriteCrackFrontFlag(argv[8]);
   WriteNormal(argv[9]);
+  
   return 0;
 }
