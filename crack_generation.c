@@ -582,8 +582,8 @@ void RearrangeLayer(int *total, double nodes_coordinate[][DIMENSION])
         temp_nodes_coordinate[count][j] = nodes_coordinate[nodes_count][j] + vector_coefficient/layer_length[nodes_count] * (nodes_coordinate[nodes_count+1][j] - nodes_coordinate[nodes_count][j]);
       }
       distance =  Distance(temp_nodes_coordinate[count], temp_nodes_coordinate[count-1]);
-      printf("vector_coefficient = %lf\n", vector_coefficient);
-      printf("temp_nodes_coordinate[%d] = ( %lf %lf %lf )\n", count, temp_nodes_coordinate[count][0], temp_nodes_coordinate[count][1], temp_nodes_coordinate[count][2]);
+      //printf("vector_coefficient = %lf\n", vector_coefficient);
+      //printf("temp_nodes_coordinate[%d] = ( %lf %lf %lf )\n", count, temp_nodes_coordinate[count][0], temp_nodes_coordinate[count][1], temp_nodes_coordinate[count][2]);
       //printf("distance = %lf\n", distance);
       vector_coefficient = vector_coefficient + temp_nodal_distance;
       //printf("vector_coefficient = %lf, temp_nodal_distance = %lf\n", vector_coefficient, temp_nodal_distance);
@@ -592,14 +592,14 @@ void RearrangeLayer(int *total, double nodes_coordinate[][DIMENSION])
       if((*total) - 1 == nodes_count) break;
       vector_coefficient = vector_coefficient - layer_length[nodes_count];
       nodes_count++;
-      printf("vector_coefficient = %lf, layer_length[%d] = %lf\n", vector_coefficient, nodes_count, layer_length[nodes_count]);
+      //printf("vector_coefficient = %lf, layer_length[%d] = %lf\n", vector_coefficient, nodes_count, layer_length[nodes_count]);
     }
   }
   if(Distance(nodes_coordinate[(*total)-1], temp_nodes_coordinate[count-1]) > EPS){
   for(j = 0; j < DIMENSION; j++){
     temp_nodes_coordinate[count][j] = nodes_coordinate[(*total)-1][j];
   }
-  printf("temp_nodes_coordinate[%d] = ( %lf %lf %lf )\n", count, temp_nodes_coordinate[count][0], temp_nodes_coordinate[count][1], temp_nodes_coordinate[count][2]);
+  //printf("temp_nodes_coordinate[%d] = ( %lf %lf %lf )\n", count, temp_nodes_coordinate[count][0], temp_nodes_coordinate[count][1], temp_nodes_coordinate[count][2]);
   count++;
   }
 
@@ -609,7 +609,7 @@ void RearrangeLayer(int *total, double nodes_coordinate[][DIMENSION])
     }
   }
   *total = count;
-  printf("number of nodes after rearrange = %d\n", count);
+  //printf("number of nodes after rearrange = %d\n", count);
 }
 
 //き裂前縁メッシュサイズ及び層間距離読み込み
@@ -645,10 +645,10 @@ void GetPointtoPointVector(int temp_nnodes, double temp_nodes_coordinate[][DIMEN
   for(i = 0; i < temp_nnodes-1; i++){
     for(j = 0; j < DIMENSION; j++){
       temp_p_to_p_vector[i][j] = temp_nodes_coordinate[i+1][j] - temp_nodes_coordinate[i][j];
-      printf("##temp_p_to_p_vector[%d][%d] = temp_nodes_coordinate[%d][%d] - temp_nodes_coordinate[%d][%d]\n%lf = %lf - %lf\n", i, j, i+1, j, i, j, temp_p_to_p_vector[i][j], temp_nodes_coordinate[i+1][j], temp_nodes_coordinate[i][j]);
+      //printf("##temp_p_to_p_vector[%d][%d] = temp_nodes_coordinate[%d][%d] - temp_nodes_coordinate[%d][%d]\n%lf = %lf - %lf\n", i, j, i+1, j, i, j, temp_p_to_p_vector[i][j], temp_nodes_coordinate[i+1][j], temp_nodes_coordinate[i][j]);
     }
       GetUnitVector(temp_p_to_p_vector[i]);
-    printf("##%dto%dvector = (%lf, %lf, %lf)\n", i, i+1, temp_p_to_p_vector[i][0],temp_p_to_p_vector[i][1],temp_p_to_p_vector[i][2]);
+    //printf("##%dto%dvector = (%lf, %lf, %lf)\n", i, i+1, temp_p_to_p_vector[i][0],temp_p_to_p_vector[i][1],temp_p_to_p_vector[i][2]);
   }
 }
 
@@ -711,19 +711,24 @@ void GetUnivectoratAllPoint(int temp_nnodes, double temp_p_to_p_vector[][DIMENSI
     //printf("temp_univec_propa[%d] = (%.16lf, %.16lf, %.16lf)\n", i, temp_univec_propa[i][0], temp_univec_propa[i][1], temp_univec_propa[i][2]);
   }
   if(initial_flag == 0){
+    printf("initial_flag == 0\n");
     for(i = 1; i < temp_nnodes; i++){
       if(small_normal_flag[i] != 1){
         for(j = 0; j < DIMENSION; j++){
           temp_univec_normal[0][j] = temp_univec_normal[i][j];
         }
+        printf("get_normal_vector_at_start_point\n");
         break;
       }
     }
     for(i = temp_nnodes - 2; i >= 0; i--){
       if(small_normal_flag[i] != 1){
+          printf("temp_univec_normal[%d] = ( %.16lf, %.16lf, %.16lf )\n", 0, temp_univec_normal[0][0], temp_univec_normal[0][1], temp_univec_normal[0][2]);
         for(j = 0; j < DIMENSION; j++){
           temp_univec_normal[temp_nnodes-1][j] = temp_univec_normal[i][j];
         }
+        printf("i = %d, ", i);
+        printf("get_normal_vector_at_end_point\n");
         break;
       }
     }
@@ -736,7 +741,7 @@ void GetUnivectoratAllPoint(int temp_nnodes, double temp_p_to_p_vector[][DIMENSI
   CrossProduct(temp_univec_normal[0], temp_univec_tangent[0], temp_univec_propa[0]);
   GetUnitVector(temp_univec_propa[0]);
   CrossProduct(temp_univec_normal[temp_nnodes-1], temp_univec_tangent[temp_nnodes-1], temp_univec_propa[temp_nnodes-1]);
-    //printf("temp_univec_normal[%d] = (%.16lf, %.16lf, %.16lf)\n", temp_nnodes-1, temp_univec_normal[temp_nnodes][0], temp_univec_normal[temp_nnodes-1][1], temp_univec_normal[temp_nnodes-1][2]);
+    printf("temp_univec_normal[%d] = (%.16lf, %.16lf, %.16lf)\n", temp_nnodes-1, temp_univec_normal[temp_nnodes][0], temp_univec_normal[temp_nnodes-1][1], temp_univec_normal[temp_nnodes-1][2]);
   GetUnitVector(temp_univec_propa[temp_nnodes-1]);
   for(i = 1; i < temp_nnodes - 1; i++){
     if(small_normal_flag[i] == 1){
@@ -978,6 +983,51 @@ void MakeInOutLayer()
         //printf("##coord_of_outer_layer[%d][%d] =  nodes_coordinate[%d][%d] + %lf * %d * univec_propa[%d][%d]\n%lf = %lf + %lf\n", j, k, j, k, layer_size, i+1, j, k, coord_of_outer_layer[k], nodes_coordinate[j][k], layer_size * (i+1) * univec_propa[j][k]);
       }
       if(j == 0 || j == nnodes-1){
+        //AddNewNode(coord_of_outer_layer, univec_normal[j], OUTER_CRACK, CRACK_SURFACE);
+      } else {
+        //AddNewNode(coord_of_outer_layer, univec_normal[j], OUTER_CRACK, OTHER);
+      }
+    }
+  }
+
+  ClearNumberOfInnerestNodes();
+
+  for(i = 0; i < NUMBER_OF_INNER_LAYERS; i++){
+    for(j = 0; j < nnodes; j++){
+      for(k = 0; k < DIMENSION; k++){
+        coord_of_inner_layer[k] = nodes_coordinate[j][k] - layer_size * (i+1) * univec_propa[j][k];        
+        //printf("##coord_of_inner_layer[%d][%d] =  nodes_coordinate[%d][%d] - %lf * %d * univec_propa[%d][%d]\n%lf = %lf - %lf\n", j, k, j, k, layer_size, i+1, j, k, coord_of_inner_layer[k], nodes_coordinate[j][k], layer_size * (i+1) * univec_propa[j][k]);
+      }
+      if(j == 0 || j == nnodes-1){
+        //AddNewNode(coord_of_inner_layer, univec_normal[j], CRACK_FACE, CRACK_SURFACE);
+      } else {
+        //AddNewNode(coord_of_inner_layer, univec_normal[j], CRACK_FACE, OTHER);
+      }
+      if(i == NUMBER_OF_INNER_LAYERS-1){
+        AddInnerNode(coord_of_inner_layer);
+      }
+    }
+  }
+  char *filename = "debug_test.node";
+  WriteCompleteNodes(filename);
+  char *filename_cf = "debug_test.nd_crack";
+  WriteCrackFlag(filename_cf);
+  char *filename_surf = "debug_test.nd_surf";
+  WriteSurfaceFlag(filename_surf);
+}
+
+void ResisterInOutLayer()
+{
+  int i,j,k;
+  double coord_of_outer_layer[DIMENSION];
+  double coord_of_inner_layer[DIMENSION];
+  for(i = 0; i < NUMBER_OF_OUTER_LAYERS; i++){
+    for(j = 0; j < nnodes; j++){
+      for(k = 0; k < DIMENSION; k++){
+        coord_of_outer_layer[k] = nodes_coordinate[j][k] + layer_size * (i+1) * univec_propa[j][k];
+        //printf("##coord_of_outer_layer[%d][%d] =  nodes_coordinate[%d][%d] + %lf * %d * univec_propa[%d][%d]\n%lf = %lf + %lf\n", j, k, j, k, layer_size, i+1, j, k, coord_of_outer_layer[k], nodes_coordinate[j][k], layer_size * (i+1) * univec_propa[j][k]);
+      }
+      if(j == 0 || j == nnodes-1){
         AddNewNode(coord_of_outer_layer, univec_normal[j], OUTER_CRACK, CRACK_SURFACE);
       } else {
         AddNewNode(coord_of_outer_layer, univec_normal[j], OUTER_CRACK, OTHER);
@@ -1010,7 +1060,6 @@ void MakeInOutLayer()
   char *filename_surf = "debug_test.nd_surf";
   WriteSurfaceFlag(filename_surf);
 }
-
 void DecisionOfInOut(double temp_nnodes, double temp_nodes_coordinate[][DIMENSION])
 {
   char buf[256];
@@ -1156,7 +1205,7 @@ void LaminationLayer()
   ClearNewNodeFlag();
   ClearInOutFlag();
   int count;
-  for(count = 0; count < 300; count++){
+  for(count = 0; count < 5; count++){
     printf("count = %d\n", count);
   //while(1){
     inside_count = 0;
@@ -1298,15 +1347,16 @@ void PerformCommand()
   GetUnitVector(univec_normal[0]);
   GetUnivectoratAllPoint(nnodes, p_to_p_vector, univec_normal, univec_propa, univec_tangent, 0.01);
   SetScaleFactor();
-  VectorCorrectiontoSurface();
-  GetAverageVector(univec_propa[0], univec_propa[1], univec_propa[1]);
-  GetAverageVector(univec_propa[nnodes-1], univec_propa[nnodes-2], univec_propa[nnodes-2]);
   ResisterCrackFrontNodes(nnodes, nodes_coordinate, univec_normal);
   MakeInOutLayer();
 
   printf("Laminate start\n");
   LaminationLayer();
   LaminationPointsToNodes();
+  VectorCorrectiontoSurface();
+  GetAverageVector(univec_propa[0], univec_propa[1], univec_propa[1]);
+  GetAverageVector(univec_propa[nnodes-1], univec_propa[nnodes-2], univec_propa[nnodes-2]);
+  ResisterInOutLayer();
 }
 
 int main(int argc, char *argv[]){
